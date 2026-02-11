@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Staffing Model Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
+input[type=number]{-moz-appearance:textfield}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useCallback}=React;
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DEFAULT_TASKS=[
+{name:"Onboarding",volumes:[96,110,109,117,102,97,119,100,97,122,114,74]},
+{name:"User Maintenance",volumes:[640,893,1003,741,703,729,1103,859,877,1050,916,651]},
+{name:"Sales Compliance",volumes:[389,406,426,540,580,524,465,372,409,456,238,277]},
+{name:"Dealer Compliance",volumes:[33,183,372,75,78,45,144,0,0,81,72,0]},
+{name:"Email/JIRA",volumes:[939,945,1105,1146,1160,1140,1085,1171,1099,1355,1123,899]},
+{name:"Tickets",volumes:[20,43,35,31,15,12,12,23,66,116,53,39]},
+{name:"Other",volumes:[96,110,109,117,102,97,119,100,97,122,114,74]}
+];
+const DEFAULT_WD=[22,20,22,22,21,22,23,21,22,22,21,23];
+const DEFAULT_MINS={"Onboarding":25,"User Maintenance":8,"Sales Compliance":12,"Dealer Compliance":15,"Email/JIRA":5,"Tickets":20,"Other":10};
+function dc(o){return JSON.parse(JSON.stringify(o))}
+
+const inputStyle={background:"#1a1a2e",border:"1px solid #2a2a4a",borderRadius:4,padding:"6px 10px",color:"#e0e0e0",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box"};
+const hintStyle={fontSize:12,color:"#666",margin:"8px 0 0"};
+const colHeader={fontSize:11,color:"#888",fontWeight:600,textTransform:"uppercase",letterSpacing:1};
+const delBtn={background:"#e94560",color:"#fff",border:"none",borderRadius:4,width:28,height:28,cursor:"pointer",fontSize:12,fontWeight:700};
+const addBtn={background:"#4ecca3",color:"#1a1a2e",border:"none",borderRadius:4,padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:700,whiteSpace:"nowrap"};
+const tableStyle={width:"100%",borderCollapse:"collapse",fontSize:13};
+const thStyle={padding:"8px 6px",textAlign:"center",fontSize:11,color:"#888",fontWeight:600,borderBottom:"1px solid #2a2a4a",whiteSpace:"nowrap"};
+const tdStyle={padding:"6px",borderBottom:"1px solid #1a1a2e",fontSize:13};
+
+function Card({title,children,wide}){
+return(<div style={{background:"#16213e",borderRadius:8,padding:20,border:"1px solid #2a2a4a",...(wide?{width:"100%"}:{minWidth:280,flex:"1 1 280px"})}}><h3 style={{margin:"0 0 12px",fontSize:15,color:"#fff",fontWeight:600}}>{title}</h3>{children}</div>);
+}
+function StatCard({label,value,color}){
+return(<div style={{background:"#16213e",borderRadius:8,padding:20,border:"1px solid #2a2a4a",textAlign:"center"}}><div style={{fontSize:28,fontWeight:700,color:color||"#fff"}}>{value}</div><div style={{fontSize:12,color:"#888",marginTop:4}}>{label}</div></div>);
+}
+
+function App(){
+const[hoursPerDay,setHoursPerDay]=useState(8);
+const[targetOT,setTargetOT]=useState(0);
+const[workingDays,setWorkingDays]=useState([...DEFAULT_WD]);
+const[tasks,setTasks]=useState(dc(DEFAULT_TASKS));
+const[minsPerTask,setMinsPerTask]=useState({...DEFAULT_MINS});
+const[managers,setManagers]=useState([1,1,1,1,1,1,1,1,1,1,1,1]);
+const[program,setProgram]=useState([0,0,0,0,0,0,0,0,0,0,0,0]);
+const[production,setProduction]=useState([2,1,1,1,1,1,1,1,1,1,1,1]);
+const[newTaskName,setNewTaskName]=useState("");
+const[newTaskMins,setNewTaskMins]=useState(10);
+const[view,setView]=useState("inputs");
+
+const availMins=useCallback((mi)=>workingDays[mi]*hoursPerDay*60*(1+targetOT/100),[workingDays,hoursPerDay,targetOT]);
+const totalWorkMins=useCallback((mi)=>tasks.reduce((s,t)=>s+(t.volumes[mi]||0)*(minsPerTask[t.name]||0),0),[tasks,minsPerTask]);
+const hcNeeded=useCallback((mi)=>{const a=availMins(mi);return a>0?totalWorkMins(mi)/a:0},[availMins,totalWorkMins]);
+const actualHC=useCallback((mi)=>(managers[mi]||0)+(program[mi]||0)+(production[mi]||0),[managers,program,production]);
+
+const updateVol=(ti,mi,val)=>{const t=dc(tasks);t[ti].volumes[mi]=Number(val)||0;setTasks(t)};
+const updateWD=(mi,val)=>{const w=[...workingDays];w[mi]=Number(val)||0;setWorkingDays(w)};
+const updateMins=(name,val)=>setMinsPerTask({...minsPerTask,[name]:Number(val)||0});
+const updateStaff=(type,mi,val)=>{const v=Number(val)||0;if(type==="mgr"){const a=[...managers];a[mi]=v;setManagers(a)}if(type==="pgm"){const a=[...program];a[mi]=v;setProgram(a)}if(type==="prod"){const a=[...production];a[mi]=v;setProduction(a)}};
+const addTask=()=>{if(!newTaskName.trim())return;setTasks([...tasks,{name:newTaskName.trim(),volumes:Array(12).fill(0)}]);setMinsPerTask({...minsPerTask,[newTaskName.trim()]:newTaskMins});setNewTaskName("");setNewTaskMins(10)};
+const removeTask=(i)=>{const t=dc(tasks);const name=t[i].name;t.splice(i,1);setTasks(t);const m={...minsPerTask};delete m[name];setMinsPerTask(m)};
+
+const tabs=[{id:"inputs",label:"Global Settings"},{id:"tasks",label:"Tasks & Minutes"},{id:"volumes",label:"Monthly Volumes"},{id:"staffing",label:"Actual Staffing"},{id:"results",label:"Results"}];
+
+return(
+<div>
+<div style={{background:"linear-gradient(135deg,#16213e,#0f3460)",padding:"20px 24px",borderBottom:"3px solid #e94560"}}>
+<h1 style={{margin:0,fontSize:22,color:"#fff",fontWeight:700}}>Staffing Model Calculator</h1>
+<p style={{margin:"4px 0 0",fontSize:13,color:"#a0a0b0"}}>Fill in your inputs and the model calculates headcount needed</p>
+</div>
+<div style={{display:"flex",gap:0,background:"#16213e",borderBottom:"1px solid #2a2a4a",flexWrap:"wrap"}}>
+{tabs.map(t=>(<button key={t.id} onClick={()=>setView(t.id)} style={{padding:"12px 20px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:view===t.id?"#0f3460":"transparent",color:view===t.id?"#e94560":"#8888aa",borderBottom:view===t.id?"2px solid #e94560":"2px solid transparent"}}>{t.label}</button>))}
+</div>
+<div style={{padding:24,maxWidth:1200,margin:"0 auto"}}>
+
+{view==="inputs"&&(
+<div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+<Card title="Hours Per Day"><input type="number" value={hoursPerDay} onChange={e=>setHoursPerDay(Number(e.target.value)||0)} style={inputStyle} min={1} max={24}/><p style={hintStyle}>Standard work hours per day (before overtime)</p></Card>
+<Card title="Target Overtime %"><div style={{display:"flex",alignItems:"center",gap:8}}><input type="number" value={targetOT} onChange={e=>setTargetOT(Number(e.target.value)||0)} style={inputStyle} min={0} max={100}/><span style={{fontSize:14,color:"#aaa"}}>%</span></div><p style={hintStyle}>0% = no overtime. 10% = staff can work 10% beyond normal hours.</p></Card>
+<Card title="Working Days Per Month"><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{MONTHS.map((m,i)=>(<div key={m} style={{textAlign:"center"}}><label style={{fontSize:11,color:"#888",display:"block"}}>{m}</label><input type="number" value={workingDays[i]} onChange={e=>updateWD(i,e.target.value)} style={{...inputStyle,width:50,textAlign:"center"}} min={0} max={31}/></div>))}</div></Card>
+</div>
+)}
+
+{view==="tasks"&&(
+<Card title="Task Categories & Minutes Per Task" wide>
+<p style={hintStyle}>How long does each task take on average? Add or remove categories as needed.</p>
+<div style={{display:"grid",gridTemplateColumns:"1fr 120px 40px",gap:8,alignItems:"center",marginTop:12}}>
+<div style={colHeader}>Task Name</div><div style={colHeader}>Mins / Task</div><div></div>
+{tasks.map((t,i)=>(<React.Fragment key={i}><div style={{fontSize:14,fontWeight:500}}>{t.name}</div><input type="number" value={minsPerTask[t.name]||0} onChange={e=>updateMins(t.name,e.target.value)} style={{...inputStyle,textAlign:"center"}} min={0}/><button onClick={()=>removeTask(i)} style={delBtn} title="Remove">X</button></React.Fragment>))}
+</div>
+<div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #2a2a4a",display:"flex",gap:8,alignItems:"center"}}>
+<input placeholder="New task name" value={newTaskName} onChange={e=>setNewTaskName(e.target.value)} style={{...inputStyle,flex:1}}/>
+<input type="number" value={newTaskMins} onChange={e=>setNewTaskMins(Number(e.target.value)||0)} style={{...inputStyle,width:80,textAlign:"center"}} placeholder="Mins"/>
+<button onClick={addTask} style={addBtn}>+ Add</button>
+</div>
+</Card>
+)}
+
+{view==="volumes"&&(
+<Card title="Monthly Task Volumes" wide>
+<p style={hintStyle}>How many of each task does the team handle per month?</p>
+<div style={{overflowX:"auto",marginTop:12}}>
+<table style={tableStyle}><thead><tr><th style={thStyle}>Task</th>{MONTHS.map(m=><th key={m} style={thStyle}>{m}</th>)}</tr></thead>
+<tbody>{tasks.map((t,ti)=>(<tr key={ti}><td style={{...tdStyle,fontWeight:600,whiteSpace:"nowrap"}}>{t.name}</td>{MONTHS.map((m,mi)=>(<td key={mi} style={tdStyle}><input type="number" value={t.volumes[mi]} onChange={e=>updateVol(ti,mi,e.target.value)} style={{...inputStyle,width:60,textAlign:"center",fontSize:12}} min={0}/></td>))}</tr>))}</tbody></table>
+</div>
+</Card>
+)}
+
+{view==="staffing"&&(
+<Card title="Actual Staffing (Current Headcount)" wide>
+<p style={hintStyle}>Enter your current headcount by role type for each month.</p>
+<div style={{overflowX:"auto",marginTop:12}}>
+<table style={tableStyle}><thead><tr><th style={thStyle}>Role</th>{MONTHS.map(m=><th key={m} style={thStyle}>{m}</th>)}</tr></thead>
+<tbody>
+{[{label:"Managers",data:managers,type:"mgr"},{label:"Program",data:program,type:"pgm"},{label:"Production",data:production,type:"prod"}].map(r=>(<tr key={r.type}><td style={{...tdStyle,fontWeight:600}}>{r.label}</td>{MONTHS.map((m,mi)=>(<td key={mi} style={tdStyle}><input type="number" value={r.data[mi]} onChange={e=>updateStaff(r.type,mi,e.target.value)} style={{...inputStyle,width:50,textAlign:"center",fontSize:12}} min={0}/></td>))}</tr>))}
+<tr><td style={{...tdStyle,fontWeight:700,color:"#e94560"}}>Total Actual</td>{MONTHS.map((m,mi)=>(<td key={mi} style={{...tdStyle,fontWeight:700,textAlign:"center"}}>{actualHC(mi)}</td>))}</tr>
+</tbody></table>
+</div>
+</Card>
+)}
+
+{view==="results"&&(
+<div>
+<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:24}}>
+<StatCard label="Avg HC Needed" value={(MONTHS.reduce((s,_,i)=>s+hcNeeded(i),0)/12).toFixed(1)}/>
+<StatCard label="Avg HC Actual" value={(MONTHS.reduce((s,_,i)=>s+actualHC(i),0)/12).toFixed(1)}/>
+<StatCard label="Avg Delta" value={(MONTHS.reduce((s,_,i)=>s+(actualHC(i)-hcNeeded(i)),0)/12).toFixed(1)} color={MONTHS.reduce((s,_,i)=>s+(actualHC(i)-hcNeeded(i)),0)/12<0?"#e94560":"#4ecca3"}/>
+</div>
+<div style={{background:"#16213e",borderRadius:8,padding:20,border:"1px solid #2a2a4a",width:"100%",marginBottom:24}}>
+<h3 style={{margin:"0 0 12px",fontSize:15,color:"#fff",fontWeight:600}}>Monthly Staffing Summary</h3>
+<div style={{overflowX:"auto"}}>
+<table style={tableStyle}><thead><tr><th style={thStyle}></th>{MONTHS.map(m=><th key={m} style={thStyle}>{m}</th>)}</tr></thead>
+<tbody>
+<tr><td style={{...tdStyle,fontWeight:600}}>Working Days</td>{MONTHS.map((m,i)=><td key={i} style={{...tdStyle,textAlign:"center"}}>{workingDays[i]}</td>)}</tr>
+<tr><td style={{...tdStyle,fontWeight:600}}>Total Work Mins</td>{MONTHS.map((m,i)=><td key={i} style={{...tdStyle,textAlign:"center"}}>{totalWorkMins(i).toLocaleString()}</td>)}</tr>
+<tr><td style={{...tdStyle,fontWeight:600}}>Avail Mins/Person</td>{MONTHS.map((m,i)=><td key={i} style={{...tdStyle,textAlign:"center"}}>{availMins(i).toLocaleString()}</td>)}</tr>
+<tr style={{background:"#0f3460"}}><td style={{...tdStyle,fontWeight:700,color:"#4ecca3"}}>HC Needed (Forecast)</td>{MONTHS.map((m,i)=><td key={i} style={{...tdStyle,textAlign:"center",fontWeight:700,color:"#4ecca3"}}>{Math.ceil(hcNeeded(i))}</td>)}</tr>
+<tr><td style={{...tdStyle,fontWeight:600}}>Managers</td>{MONTHS.map((m,i)=><td key={i} style={{...tdStyle,textAlign:"center"}}>{managers[i]}</td>)}</tr>
+<tr><td style={{...tdStyle,fontWeight:600}}>Program</td>{MONTHS.map((m,i)=><td key={i} style={{...tdStyle,textAlign:"center"}}>{program[i]}</td>)}</tr>
+<tr><td style={{...tdStyle,fontWeight:600}}>Production</td>{MONTHS.map((m,i)=><td key={i} style={{...tdStyle,textAlign:"center"}}>{production[i]}</td>)}</tr>
+<tr><td style={{...tdStyle,fontWeight:700}}>Total Actual</td>{MONTHS.map((m,i)=><td key={i} style={{...tdStyle,fontWeight:700,textAlign:"center"}}>{actualHC(i)}</td>)}</tr>
+<tr style={{background:"#1a1a2e"}}><td style={{...tdStyle,fontWeight:700,color:"#e94560"}}>Delta</td>{MONTHS.map((m,i)=>{const d=actualHC(i)-Math.ceil(hcNeeded(i));return<td key={i} style={{...tdStyle,textAlign:"center",fontWeight:700,color:d<0?"#e94560":d>0?"#4ecca3":"#e0e0e0"}}>{d>0?"+":""}{d.toFixed(1)}</td>})}</tr>
+</tbody></table>
+</div>
+</div>
+<div style={{background:"#16213e",borderRadius:8,padding:20,border:"1px solid #2a2a4a",width:"100%"}}>
+<h3 style={{margin:"0 0 12px",fontSize:15,color:"#fff",fontWeight:600}}>Per Task Breakdown</h3>
+<div style={{overflowX:"auto"}}>
+<table style={tableStyle}><thead><tr><th style={thStyle}>Task</th><th style={thStyle}>Mins/Task</th>{MONTHS.map(m=><th key={m} style={thStyle}>{m}</th>)}</tr></thead>
+<tbody>{tasks.map((t,ti)=>(<React.Fragment key={ti}>
+<tr><td style={{...tdStyle,fontWeight:600}} rowSpan={3}>{t.name}</td><td style={{...tdStyle,fontSize:11,color:"#888"}} rowSpan={3}>{minsPerTask[t.name]}</td>{MONTHS.map((m,mi)=>(<td key={mi} style={{...tdStyle,textAlign:"center",fontSize:12}}>{t.volumes[mi]}</td>))}</tr>
+<tr>{MONTHS.map((m,mi)=>{const pd=workingDays[mi]>0?(t.volumes[mi]/workingDays[mi]).toFixed(0):0;return<td key={mi} style={{...tdStyle,textAlign:"center",fontSize:11,color:"#888"}}>{pd}/day</td>})}</tr>
+<tr>{MONTHS.map((m,mi)=>{const hc=availMins(mi)>0?((t.volumes[mi]*(minsPerTask[t.name]||0))/availMins(mi)).toFixed(1):0;return<td key={mi} style={{...tdStyle,textAlign:"center",fontSize:11,color:"#4ecca3"}}>{hc} HC</td>})}</tr>
+</React.Fragment>))}</tbody></table>
+</div>
+</div>
+</div>
+)}
+
+</div>
+</div>
+);
+}
+
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
